@@ -32,3 +32,9 @@ The python script viz.py reads its configuration from the conf.json file. Parame
     1. iterations: the number of training iterations
 
 
+Screenshot
+------
+
+Here is a screenshot of the model trained with this [configuration](conf.json).
+
+![screenshot using divergence](imgs/screenshot_divergence.png)
