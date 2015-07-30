@@ -1,0 +1,192 @@
+#!/usr/bin/python
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+import logging
+import simplejson as json
+import re
+import glob
+import os
+
+
+def load_pgm(filename, byteorder=">"):
+    """Return image data from a raw PGM file as numpy array.
+    Format specification: http://netpbm.sourceforge.net/doc/pgm.html
+    """
+    with open(filename, "rb") as f:
+        buff = f.read()
+    try:
+        header, width, height, maxval = re.search(
+            b"(^P5\s(?:\s*#.*[\r\n])*"
+            b"(\d+)\s(?:\s*#.*[\r\n])*"
+            b"(\d+)\s(?:\s*#.*[\r\n])*"
+            b"(\d+)\s(?:\s*#.*[\r\n]\s)*)", buff).groups()
+    except AttributeError:
+        raise ValueError(u"Not a raw PGM file: '%s'" % filename)
+    try:
+        a = np.frombuffer(buff, dtype=u"u1" if int(maxval) < 256 else byteorder + u"u2", count=int(width) * int(height),
+                          offset=len(header)).reshape((int(height), int(width)))
+        return a
+    except Exception as e:
+        logging.warning("Ignoring image in %s for reason %s", filename, str(e))
+        return None
+
+
+def load_cropped_yale(folder):
+    paths = [_ for _ in glob.glob(os.path.join(folder, u"*.pgm"))]
+    logging.info("Loading %d images in %s", len(paths), folder)
+    loaded = [load_pgm(f) for f in glob.glob(os.path.join(folder, u"*.pgm"))]
+    loaded = [x for x in loaded if np.any(x, None)]
+    logging.info("Successfully loaded %d images out of %d", len(loaded), len(paths))
+    n_rows, n_cols = loaded[0].shape
+    logging.info("Images dimensions: %d by %d pixels", n_rows, n_cols)
+    return loaded, n_rows, n_cols
+
+
+class LeeSeungNonnegativeMatrixFactorization:
+    """
+    "Abstract" non-negative matrix factorization as in the paper from Lee & Seung:
+    Algorithms for non-negative matrix factorization (NIPS 2001)
+    """
+
+    def __init__(self, n_features, n_examples, components, iterations, loss_name, random_seed=0):
+        self.n_features = n_features
+        self.n_examples = n_examples
+        self.components = components
+        self.iterations = iterations
+        self.loss_name = loss_name
+        np.random.seed(random_seed)
+        self.W = np.random.random((n_features, components))
+        self.H = np.random.random((components, n_examples))
+
+
+class EuclideanLeeSeungNonnegativeMatrixFactorization(LeeSeungNonnegativeMatrixFactorization):
+    """
+    Implementation of the update rules for Mean Squared Error loss.
+    """
+
+    def __init__(self, n_features, n_examples, components, iterations):
+        LeeSeungNonnegativeMatrixFactorization.__init__(self, n_features, n_examples, components, iterations,
+                                                        "euclidean")
+
+    def update_factors(self, V):
+        self.H *= np.dot(np.transpose(self.W), V) / np.dot(np.dot(np.transpose(self.W), self.W), self.H)
+        self.W *= np.dot(V, np.transpose(self.H)) / np.dot(self.W, np.dot(self.H, np.transpose(self.H)))
+
+    def compute_loss(self, V):
+        return np.linalg.norm(V - np.dot(self.W, self.H)) ** 2
+
+
+class DivergenceLeeSeungNonnegativeMatrixFactorization(LeeSeungNonnegativeMatrixFactorization):
+    """
+    Implementation of the update rules for divergence loss (linked to Kullback-Leibler divergence).
+    """
+
+    def __init__(self, n_features, n_examples, components, iterations):
+        LeeSeungNonnegativeMatrixFactorization.__init__(self, n_features, n_examples, components, iterations,
+                                                        "divergence")
+
+    def update_factors(self, V):
+        # The [:, None] is a trick to force correct broadcasting for np.divide
+        self.H *= np.dot(np.transpose(self.W), V / np.dot(self.W, self.H)) / np.sum(self.W, axis=0)[:, None]
+        self.W *= np.dot(V / np.dot(self.W, self.H), np.transpose(self.H)) / np.sum(self.H, axis=1)
+
+    def compute_loss(self, V):
+        # Compute WH only once.
+        WH = np.dot(self.W, self.H)
+        return np.sum(V * np.log(1e-10 + V / WH) - V + WH)
+
+
+def get_model(n_features, n_examples, conf):
+    if conf["type"] == "euclidean":
+        logging.info("Creating nonnegative matrix factorization using Euclidean loss")
+        return EuclideanLeeSeungNonnegativeMatrixFactorization(n_features, n_examples, conf["components"],
+                                                               conf["iterations"])
+    elif conf["type"] == "divergence":
+        logging.info("Creating nonnegative matrix factorization using KL-Divergence loss")
+        return DivergenceLeeSeungNonnegativeMatrixFactorization(n_features, n_examples, conf["components"],
+                                                                conf["iterations"])
+    else:
+        raise ValueError("Invalid NMF type: {0}".format(conf["type"]))
+
+
+class ProgressViz:
+    def __init__(self, model, n_rows, n_cols):
+        plt.ion()
+        self.n_rows, self.n_cols = n_rows, n_cols
+        self.n_comp = model.W.shape[1]
+        self.sub_rows, self.sub_columns = self.determine_subplots()
+        self.figure, self.axes = plt.subplots(self.sub_rows, self.sub_columns)
+        self.figure.suptitle(u"Loss and components -- NMF w/ {0}".format(model.loss_name), size=10)
+        self.ax_loss = self.axes[0, 0]
+        self.ax_loss.set_title(u"Loss", size=8)
+        self.lines, = self.ax_loss.plot([], [], u'o')
+        self.images = []
+        for i in range(self.sub_rows * self.sub_columns - 1):
+            sub_i, sub_j = (1 + i) % self.sub_rows, (1 + i) / self.sub_rows
+            subplot = self.axes[sub_i, sub_j]
+            if i < self.n_comp:
+                self.images.append(subplot.imshow(self.prepare_image(model.W[:, i]), cmap=u"Greys"))
+                subplot.set_title(u"W[:, %d]" % i, size=8)
+                subplot.set_axis_off()
+            else:
+                # Disable empty subplots
+                subplot.set_visible(False)
+        self.ax_loss.set_autoscaley_on(True)
+        self.ax_loss.set_xlim(0, model.iterations)
+        self.ax_loss.grid()
+        self.ax_loss.get_xaxis().set_visible(False)
+        self.ax_loss.get_yaxis().set_visible(False)
+
+    def determine_subplots(self):
+        nb_plots = self.n_comp + 1
+        int_squared_root = int(np.sqrt(nb_plots))
+        return int_squared_root, 1 + int(nb_plots / int_squared_root)
+
+    def update_draw(self, iterations, losses, W):
+        # Update loss
+        self.lines.set_xdata(iterations)
+        self.lines.set_ydata(losses)
+        self.ax_loss.relim()
+        self.ax_loss.autoscale_view()
+        # Update mat' fact
+        for i in range(self.n_comp):
+            self.images[i].set_data(self.prepare_image(W[:, i]))
+        self.figure.canvas.draw()
+        self.figure.canvas.flush_events()
+
+    def prepare_image(self, vec):
+        return 1. - vec.reshape((self.n_rows, self.n_cols))
+
+    def wait_end(self):
+        plt.ioff()
+        plt.show()
+
+
+def main(configuration):
+    cropped_yale, n_rows, n_cols = load_cropped_yale(configuration["data"]["path"])
+    logging.info("Shuffling images...")
+    random.shuffle(cropped_yale)
+    n_images = min(configuration["data"]["number"], len(cropped_yale))
+    logging.info("Converting to flat vectors, keeping %d images...", n_images)
+    data_matrix = np.vstack((x.flatten() for x in cropped_yale[:configuration["data"]["number"]])).transpose() / 255.
+    n_features, n_examples = data_matrix.shape
+    logging.info("Data matrix dimensions: %d (features) by %d (examples)", n_features, n_examples)
+    model = get_model(n_features, n_examples, configuration["nmf"])
+    p_viz = ProgressViz(model, n_rows, n_cols)
+    iterations, losses = [], []
+    for i in range(model.iterations):
+        model.update_factors(data_matrix)
+        loss = model.compute_loss(data_matrix)
+        logging.info("Iteration % 4d => loss: %f", i, loss)
+        losses.append(loss)
+        iterations.append(i + 1)
+        p_viz.update_draw(iterations, losses, model.W)
+    logging.info(u"Final loss: %f", model.compute_loss(data_matrix))
+    p_viz.wait_end()
+
+
+if __name__ == u"__main__":
+    logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+    with open("conf.json", "r") as cf:
+        main(json.load(cf))

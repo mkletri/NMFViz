@@ -1,0 +1,11 @@
+{
+    "data": {
+        "path": "CroppedYale",
+        "number": 100
+    },
+    "nmf": {
+        "type": "divergence",
+        "components": 40,
+        "iterations": 100
+    }
+}
