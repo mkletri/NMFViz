@@ -131,11 +131,10 @@ class DivergenceLeeSeungNonnegativeMatrixFactorization(NonnegativeMatrixFactoriz
         return np.sum(V * np.log(1e-10 + V / WH) - V + WH) / self.n_examples
 
 
-# TODO: Add the reference to the paper
 class SparseHoyerNonnegativeMatrixFactorization(NonnegativeMatrixFactorization):
     """
     Implementation of a sparse nonnegative matrix factorization as in the paper from Patrik O. Hoyer:
-
+    Non-negative sparse coding (arXiv)
     """
     def __init__(self, n_features, n_examples, components, iterations, sparseness, learning_rate, decay):
         NonnegativeMatrixFactorization.__init__(self, n_features, n_examples, components, iterations, "sparse")

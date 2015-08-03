@@ -13,7 +13,7 @@
     "nmf": {
         "type": "sparse-l2",
         "components": 40,
-        "iterations": 1000,
+        "iterations": 150,
         "sparseness": 10,
         "learning rate": 0.03,
         "learning rate decay": 1,
