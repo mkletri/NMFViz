@@ -1,6 +1,11 @@
 {
 		"seed": 0,
 		"data": {
+    		"type": "CIFAR-10",
+        "path": "cifar-10-batches-py",
+        "number": 2000
+    },
+		"other example of data": {
     		"type": "CBCL",
         "path": "CBCL/svm.train.normgrey",
         "number": 6000
@@ -16,12 +21,12 @@
         "number": 1000
     },
     "nmf": {
-        "type": "sparse-l2",
-        "components": 40,
-        "iterations": 150,
+        "type": "euclidean",
+        "components": 100,
+        "iterations": 200,
         "sparseness": 10,
         "learning rate": 0.01,
-        "learning rate decay": 0.99,
+        "learning rate decay": 1,
         "l2": 0.01
     }
 }

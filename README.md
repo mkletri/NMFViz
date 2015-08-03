@@ -4,14 +4,16 @@ NMFViz
 This simple program proposes a visualization of what happens while training a NMF as in :
 
 * *Algorithms for non-negative matrix factorization* from Lee & Seung
-[(NIPS 2011)](http://papers.nips.cc/paper/1861-algorithms-for-non-negative-matrix-factorization.pdf).
+[(NIPS 2011)](http://papers.nips.cc/paper/1861-algorithms-for-non-negative-matrix-factorization.pdf)
 * *Non-negative sparse coding* from Hoyer [(arXiv)](http://arxiv.org/pdf/cs/0202009.pdf)
+* An adaption of Hoyer's NMF using L2 regularization on W
 
 It supports the following datasets:
 
 * [Extended Yale B dataset](http://vision.ucsd.edu/~leekc/ExtYaleDatabase/ExtYaleB.html)
 * [MNIST](http://yann.lecun.com/exdb/mnist/)
 * [CBCL](http://cbcl.mit.edu/cbcl/software-datasets/FaceData2.html)
+* [CIFAR-10](http://www.cs.toronto.edu/~kriz/cifar.html)
 
 It works for me (tm) on OSX with Python 3.4.3 and these libraries:
 
@@ -27,6 +29,8 @@ How-to
 1. Fetch some data to play with:
 	1. Use the get_yale.sh bash script to get the data, put them all in the same folder (and remove *Ambient.pgm files*)
 	1. Use the get_mnist.sh bash script to get the MNSIT data (gunzip binary file)
+	1. Use the get_cbcl.sh bash script to get the CBCL data
+	1. Use the get_cifar10.sh bash script to get the CIFAR-10 and convert it so python 3 can read it
 1. Use the nmf_viz.py python script to visualize the training procedure.
 
 ### Parameters of viz.py
@@ -40,11 +44,14 @@ The python script viz.py reads its configuration from the conf.json file. Parame
     1. type: the name of the loss to use ("euclidean" or "divergence" or "sparse" or "sparse-l2")
     1. components: the number of components to use
     1. iterations: the number of training iterations
-    1. sparseness: the weight of the sparseness constraint, if any in the model.
-    1. learning rate: the learning rate, if any in the model.
-    1. learning rate decay: the learning rate decay, if any in the model.
+    1. sparseness: the weight of the sparseness constraint, if any in the model
+    1. learning rate: the learning rate, if any in the model
+    1. learning rate decay: the learning rate decay, if any in the model
     1. l2: the weight of the L2 regularization, if any in the model
 
+### cifar10_p3.py
+Careful, this script is written in Python 2. It converts the 'cPickled' batches to '.npy' files that numpy can load.
+It also converts RGB images to grayscale images.
 
 Screenshot
 ------
@@ -60,3 +67,9 @@ Here is another screenshot of the 'sparse-L2' NMF with 40 components, 150 iterat
 Here is another screenshot of the 'sparse-L2' NMF with 40 components, 150 iterations on 6000 'CBCL' images.
 
 ![screenshot using sparse L2 on CBCL](imgs/screenshot_cbcl.png)
+
+Here is a last example on CIFAR-10. The shapes are not really well defined... Well, maybe using a non-linear method
+to extract representations, like a neural network, on this dataset is better. It is trained using the 'euclidean' NMF
+with 100 components and 150 iterations on 2000 CIFAR images.
+
+![screenshot using euclidean on CIFAR-10](imgs/screenshot_cifar10.png)

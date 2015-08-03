@@ -10,6 +10,7 @@ import os
 import gzip
 import struct
 import array
+import pickle
 
 
 def load_pgm(filename, byteorder=">"):
@@ -43,18 +44,18 @@ def load_mnsit(filename):
         data = array.array("B", gf.read())
     data = [np.array(data[i * rows * cols : (i + 1) * rows * cols]) for i in range(size)]
     logging.info("Loaded %d images from %s", len(data), filename)
-    return data, rows, cols
+    return data, rows, cols, 255.0
 
 
 def load_cropped_yale(folder):
-    paths = [_ for _ in glob.glob(os.path.join(folder, u"*.pgm"))]
+    paths = [_ for _ in glob.glob(os.path.join(folder, "*.pgm"))]
     logging.info("Loading %d images in %s", len(paths), folder)
-    loaded = [load_pgm(f) for f in glob.glob(os.path.join(folder, u"*.pgm"))]
+    loaded = [load_pgm(f) for f in glob.glob(os.path.join(folder, "*.pgm"))]
     loaded = [x for x in loaded if np.any(x, None)]
     logging.info("Successfully loaded %d images out of %d", len(loaded), len(paths))
     n_rows, n_cols = loaded[0].shape
     logging.info("Images dimensions: %d by %d pixels", n_rows, n_cols)
-    return loaded, n_rows, n_cols
+    return loaded, n_rows, n_cols, 255.0
 
 
 def load_cbcl(filename):
@@ -65,34 +66,37 @@ def load_cbcl(filename):
         assert n_features == 361, "Expected number of features to be <361> but was <%d>" % n_features
         data = [np.array([float(x) for x in line.strip().split()[:-1]]) for line in f]
         logging.info("Loaded %d images from %s", n_features, filename)
-    return data, 19, 19
+    return data, 19, 19, 1.0
+
+
+def load_cifar10(folder):
+    paths = [_ for _ in glob.glob(os.path.join(folder, "data_batch_*.npy"))]
+    logging.info("Loading %d batches from %s (and converting images to grayscale)", len(paths), folder)
+    for p in paths:
+        logging.info("Loading batch: %s", p)
+        d = np.load(p)
+    data = [x for x in d]
+    logging.info("Loaded %d images from %s", len(data), folder)
+    return data, 32, 32, 255.0
 
 
 def load_data(conf):
     t = conf["type"]
     if t == "Cropped Yale":
-        data, n_rows, n_cols = load_cropped_yale(conf["path"])
-        logging.info("Shuffling images...")
-        random.shuffle(data)
-        n_images = min(conf["number"], len(data))
-        logging.info("Converting to flat vectors, keeping %d images...", n_images)
-        data = np.vstack((x.flatten() for x in data[:conf["number"]])).transpose() / 255.0
+        data, n_rows, n_cols, norm = load_cropped_yale(conf["path"])
     elif t == "MNIST":
-        data, n_rows, n_cols = load_mnsit(conf["path"])
-        logging.info("Shuffling images...")
-        random.shuffle(data)
-        n_images = min(conf["number"], len(data))
-        logging.info("Converting to a matrix")
-        data = np.vstack((_ for _ in data[:conf["number"]])).transpose() / 255.0
+        data, n_rows, n_cols, norm = load_mnsit(conf["path"])
     elif t == "CBCL":
-        data, n_rows, n_cols = load_cbcl(conf["path"])
-        logging.info("Shuffling images...")
-        random.shuffle(data)
-        n_images = min(conf["number"], len(data))
-        logging.info("Converting to a matrix")
-        data = np.vstack((_ for _ in data[:conf["number"]])).transpose()
+        data, n_rows, n_cols, norm = load_cbcl(conf["path"])
+    elif t == "CIFAR-10":
+        data, n_rows, n_cols, norm = load_cifar10(conf["path"])
     else:
-        raise ValueError("Invalid type of data: %s (expecting 'Cropped Yale', 'MNIST' or 'CBCL')" % t)
+        raise ValueError("Invalid type of data: %s (expecting 'Cropped Yale', 'MNIST', 'CBCL' or 'CIFAR-10')" % t)
+    logging.info("Shuffling images...")
+    random.shuffle(data)
+    n_images = min(conf["number"], len(data))
+    logging.info("Converting to flat vectors, keeping %d images...", n_images)
+    data = np.vstack((x.flatten() for x in data[:conf["number"]])).transpose() / norm
     return data, n_rows, n_cols
 
 
