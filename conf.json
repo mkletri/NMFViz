@@ -1,7 +1,14 @@
 {
+		"seed": 0,
     "data": {
+    		"type": "MNIST",
+        "path": "train-images-idx3-ubyte.gz",
+        "number": 10000
+    },
+    "other example of data": {
+    		"type": "Cropped Yale",
         "path": "CroppedYale",
-        "number": 100
+        "number": 1000
     },
     "nmf": {
         "type": "sparse-l2",

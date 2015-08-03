@@ -7,6 +7,9 @@ import simplejson as json
 import re
 import glob
 import os
+import gzip
+import struct
+import array
 
 
 def load_pgm(filename, byteorder=">"):
@@ -31,6 +34,17 @@ def load_pgm(filename, byteorder=">"):
         logging.warning("Ignoring image in %s for reason %s", filename, str(e))
         return None
 
+def load_mnsit(filename):
+    logging.info("Loading MNIST data from %s", filename)
+    with gzip.open(filename) as gf:
+        magic, size, rows, cols = struct.unpack(">IIII", gf.read(16))
+        if magic != 2051:
+            raise IOError("Magic number was expected to be <2049> but was <%d>" % magic)
+        data = array.array("B", gf.read())
+    data = [np.array(data[i * rows * cols : (i + 1) * rows * cols]) for i in range(size)]
+    logging.info("Loaded %d images from %s", len(data), filename)
+    return data, rows, cols
+
 
 def load_cropped_yale(folder):
     paths = [_ for _ in glob.glob(os.path.join(folder, u"*.pgm"))]
@@ -41,6 +55,27 @@ def load_cropped_yale(folder):
     n_rows, n_cols = loaded[0].shape
     logging.info("Images dimensions: %d by %d pixels", n_rows, n_cols)
     return loaded, n_rows, n_cols
+
+
+def load_data(conf):
+    t = conf["type"]
+    if t == "Cropped Yale":
+        data, n_rows, n_cols = load_cropped_yale(conf["path"])
+        logging.info("Shuffling images...")
+        random.shuffle(data)
+        n_images = min(conf["number"], len(data))
+        logging.info("Converting to flat vectors, keeping %d images...", n_images)
+        data = np.vstack((x.flatten() for x in data[:conf["number"]])).transpose() / 255.0
+    elif t == "MNIST":
+        data, n_rows, n_cols = load_mnsit(conf["path"])
+        logging.info("Shuffling images...")
+        random.shuffle(data)
+        n_images = min(conf["number"], len(data))
+        logging.info("Converting to a matrix")
+        data = np.vstack((_ for _ in data[:conf["number"]])).transpose() / 255.0
+    else:
+        raise ValueError("Invalid type of data: %s (expecting 'Cropped Yale' or 'MNIST')" % t)
+    return data, n_rows, n_cols
 
 
 class NonnegativeMatrixFactorization:
@@ -224,12 +259,9 @@ class ProgressViz:
 
 
 def main(configuration):
-    cropped_yale, n_rows, n_cols = load_cropped_yale(configuration["data"]["path"])
-    logging.info("Shuffling images...")
-    random.shuffle(cropped_yale)
-    n_images = min(configuration["data"]["number"], len(cropped_yale))
-    logging.info("Converting to flat vectors, keeping %d images...", n_images)
-    data_matrix = np.vstack((x.flatten() for x in cropped_yale[:configuration["data"]["number"]])).transpose() / 255.
+    logging.info("Setting seed for random generator to %d", configuration["seed"])
+    data_matrix, n_rows, n_cols = load_data(configuration["data"])
+    random.seed(configuration["seed"])
     n_features, n_examples = data_matrix.shape
     logging.info("Data matrix dimensions: %d (features) by %d (examples)", n_features, n_examples)
     model = get_model(n_features, n_examples, configuration["nmf"])
