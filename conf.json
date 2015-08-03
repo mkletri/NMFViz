@@ -1,6 +1,11 @@
 {
 		"seed": 0,
-    "data": {
+		"data": {
+    		"type": "CBCL",
+        "path": "CBCL/svm.train.normgrey",
+        "number": 6000
+    },
+    "other example of data": {
     		"type": "MNIST",
         "path": "train-images-idx3-ubyte.gz",
         "number": 10000
@@ -15,8 +20,8 @@
         "components": 40,
         "iterations": 150,
         "sparseness": 10,
-        "learning rate": 0.03,
-        "learning rate decay": 1,
+        "learning rate": 0.01,
+        "learning rate decay": 0.99,
         "l2": 0.01
     }
 }

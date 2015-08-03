@@ -10,7 +10,8 @@ This simple program proposes a visualization of what happens while training a NM
 It supports the following datasets:
 
 * [Extended Yale B dataset](http://vision.ucsd.edu/~leekc/ExtYaleDatabase/ExtYaleB.html)
-* [MNIST](http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz)
+* [MNIST](http://yann.lecun.com/exdb/mnist/)
+* [CBCL](http://cbcl.mit.edu/cbcl/software-datasets/FaceData2.html)
 
 It works for me (tm) on OSX with Python 3.4.3 and these libraries:
 
@@ -52,7 +53,10 @@ Here is a screenshot of the 'divergence' NMF with 40 components and 100 iteratio
 
 ![screenshot using divergence](imgs/screenshot_divergence.png)
 
-Here is another screenshot of the 'sparse-L2' NMF with 40 components, 150 iterations on 100 'MNSIT' images.
+Here is another screenshot of the 'sparse-L2' NMF with 40 components, 150 iterations on 10000 'MNSIT' images.
 
-![screenshot using divergence](imgs/screenshot_sparse_l2.png)
+![screenshot using sparse L2 on MNIST](imgs/screenshot_sparse_l2.png)
 
+Here is another screenshot of the 'sparse-L2' NMF with 40 components, 150 iterations on 6000 'CBCL' images.
+
+![screenshot using sparse L2 on CBCL](imgs/screenshot_cbcl.png)

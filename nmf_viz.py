@@ -57,6 +57,17 @@ def load_cropped_yale(folder):
     return loaded, n_rows, n_cols
 
 
+def load_cbcl(filename):
+    logging.info("Loading data from %s", filename)
+    with open(filename, "r") as f:
+        n_examples = int(f.readline())
+        n_features = int(f.readline())
+        assert n_features == 361, "Expected number of features to be <361> but was <%d>" % n_features
+        data = [np.array([float(x) for x in line.strip().split()[:-1]]) for line in f]
+        logging.info("Loaded %d images from %s", n_features, filename)
+    return data, 19, 19
+
+
 def load_data(conf):
     t = conf["type"]
     if t == "Cropped Yale":
@@ -73,8 +84,15 @@ def load_data(conf):
         n_images = min(conf["number"], len(data))
         logging.info("Converting to a matrix")
         data = np.vstack((_ for _ in data[:conf["number"]])).transpose() / 255.0
+    elif t == "CBCL":
+        data, n_rows, n_cols = load_cbcl(conf["path"])
+        logging.info("Shuffling images...")
+        random.shuffle(data)
+        n_images = min(conf["number"], len(data))
+        logging.info("Converting to a matrix")
+        data = np.vstack((_ for _ in data[:conf["number"]])).transpose()
     else:
-        raise ValueError("Invalid type of data: %s (expecting 'Cropped Yale' or 'MNIST')" % t)
+        raise ValueError("Invalid type of data: %s (expecting 'Cropped Yale', 'MNIST' or 'CBCL')" % t)
     return data, n_rows, n_cols
 
 
@@ -196,7 +214,7 @@ def get_model(n_features, n_examples, conf):
     elif t == "sparse-l2":
         logging.info("Creating nonnegative matrix factorization using own sparse + L2 loss")
         s = conf["sparseness"]
-        l = conf["learning rate"],
+        l = conf["learning rate"]
         d = conf["learning rate decay"]
         l2 = conf["l2"]
         return SparseL2NonnegativeMatrixFactorization(n_features, n_examples,  k, i, s, l2, l, d)

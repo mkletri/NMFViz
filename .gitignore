@@ -4,3 +4,5 @@ CroppedYale.zip
 CroppedYale/
 .DS_Store
 train-images-idx3-ubyte.gz
+CBCL/
+faces.tar.gz
