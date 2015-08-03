@@ -43,10 +43,9 @@ def load_cropped_yale(folder):
     return loaded, n_rows, n_cols
 
 
-class LeeSeungNonnegativeMatrixFactorization:
+class NonnegativeMatrixFactorization:
     """
-    "Abstract" non-negative matrix factorization as in the paper from Lee & Seung:
-    Algorithms for non-negative matrix factorization (NIPS 2001)
+    "Abstract" non-negative matrix factorization.
     """
 
     def __init__(self, n_features, n_examples, components, iterations, loss_name, random_seed=0):
@@ -60,31 +59,31 @@ class LeeSeungNonnegativeMatrixFactorization:
         self.H = np.random.random((components, n_examples))
 
 
-class EuclideanLeeSeungNonnegativeMatrixFactorization(LeeSeungNonnegativeMatrixFactorization):
+class EuclideanLeeSeungNonnegativeMatrixFactorization(NonnegativeMatrixFactorization):
     """
-    Implementation of the update rules for Mean Squared Error loss.
+    Implementation of the update rules for Mean Squared Error loss as in the paper from Lee & Seung:
+    Algorithms for non-negative matrix factorization (NIPS 2001)
     """
 
     def __init__(self, n_features, n_examples, components, iterations):
-        LeeSeungNonnegativeMatrixFactorization.__init__(self, n_features, n_examples, components, iterations,
-                                                        "euclidean")
+        NonnegativeMatrixFactorization.__init__(self, n_features, n_examples, components, iterations, "euclidean")
 
     def update_factors(self, V):
         self.H *= np.dot(np.transpose(self.W), V) / np.dot(np.dot(np.transpose(self.W), self.W), self.H)
         self.W *= np.dot(V, np.transpose(self.H)) / np.dot(self.W, np.dot(self.H, np.transpose(self.H)))
 
     def compute_loss(self, V):
-        return np.linalg.norm(V - np.dot(self.W, self.H)) ** 2
+        return np.linalg.norm(V - np.dot(self.W, self.H)) ** 2 / self.n_examples
 
 
-class DivergenceLeeSeungNonnegativeMatrixFactorization(LeeSeungNonnegativeMatrixFactorization):
+class DivergenceLeeSeungNonnegativeMatrixFactorization(NonnegativeMatrixFactorization):
     """
-    Implementation of the update rules for divergence loss (linked to Kullback-Leibler divergence).
+    Implementation of the update rules for divergence loss (linked to Kullback-Leibler divergence) as in the paper from
+    Lee & Seung: Algorithms for non-negative matrix factorization (NIPS 2001)
     """
 
     def __init__(self, n_features, n_examples, components, iterations):
-        LeeSeungNonnegativeMatrixFactorization.__init__(self, n_features, n_examples, components, iterations,
-                                                        "divergence")
+        NonnegativeMatrixFactorization.__init__(self, n_features, n_examples, components, iterations, "divergence")
 
     def update_factors(self, V):
         # The [:, None] is a trick to force correct broadcasting for np.divide
@@ -94,18 +93,79 @@ class DivergenceLeeSeungNonnegativeMatrixFactorization(LeeSeungNonnegativeMatrix
     def compute_loss(self, V):
         # Compute WH only once.
         WH = np.dot(self.W, self.H)
-        return np.sum(V * np.log(1e-10 + V / WH) - V + WH)
+        return np.sum(V * np.log(1e-10 + V / WH) - V + WH) / self.n_examples
 
+
+# TODO: Add the reference to the paper
+class SparseHoyerNonnegativeMatrixFactorization(NonnegativeMatrixFactorization):
+    """
+    Implementation of a sparse nonnegative matrix factorization as in the paper from Patrik O. Hoyer:
+
+    """
+    def __init__(self, n_features, n_examples, components, iterations, sparseness, learning_rate, decay):
+        NonnegativeMatrixFactorization.__init__(self, n_features, n_examples, components, iterations, "sparse")
+        self.sparseness = sparseness
+        self.learning_rate = learning_rate
+        self.decay = decay
+        self.W = np.where(self.W < 0.5, 0, self.W)
+        self.H = np.where(self.H < 0.5, 0, self.H)
+
+    def update_factors(self, V):
+        self.H *= np.dot(np.transpose(self.W), V) / (np.dot(np.dot(np.transpose(self.W), self.W), self.H)
+                                                    + self.sparseness)
+        self.W += self.learning_rate * np.dot(V - np.dot(self.W, self.H), self.H.transpose())
+        self.W = np.maximum(0, self.W)
+        self.learning_rate *= self.decay
+
+    def compute_loss(self, V):
+        return np.linalg.norm(V - np.dot(self.W, self.H)) ** 2 / self.n_examples
+
+class SparseL2NonnegativeMatrixFactorization(NonnegativeMatrixFactorization):
+    """
+    Own implementation: sparse on H and L2 on W.
+    """
+    def __init__(self, n_features, n_examples, components, iterations, sparseness, l2, learning_rate, decay):
+        NonnegativeMatrixFactorization.__init__(self, n_features, n_examples, components, iterations, "sparse L2")
+        self.sparseness = sparseness
+        self.learning_rate = learning_rate
+        self.decay = decay
+        self.l2 = l2
+        self.W = np.where(self.W < 0.5, 0, self.W)
+        self.H = np.where(self.H < 0.5, 0, self.H)
+
+    def update_factors(self, V):
+        self.H *= np.dot(np.transpose(self.W), V) / (np.dot(np.dot(np.transpose(self.W), self.W), self.H)
+                                                    + self.sparseness)
+        self.W += self.learning_rate * (np.dot(V - np.dot(self.W, self.H), self.H.transpose()) - self.l2 * self.W)
+        self.W = np.maximum(0, self.W)
+        self.learning_rate *= self.decay
+
+    def compute_loss(self, V):
+        return np.linalg.norm(V - np.dot(self.W, self.H)) ** 2 / self.n_examples
 
 def get_model(n_features, n_examples, conf):
-    if conf["type"] == "euclidean":
+    t = conf["type"]
+    k = conf["components"]
+    i = conf["iterations"]
+    if t == "euclidean":
         logging.info("Creating nonnegative matrix factorization using Euclidean loss")
-        return EuclideanLeeSeungNonnegativeMatrixFactorization(n_features, n_examples, conf["components"],
-                                                               conf["iterations"])
-    elif conf["type"] == "divergence":
+        return EuclideanLeeSeungNonnegativeMatrixFactorization(n_features, n_examples, k, i)
+    elif t == "divergence":
         logging.info("Creating nonnegative matrix factorization using KL-Divergence loss")
-        return DivergenceLeeSeungNonnegativeMatrixFactorization(n_features, n_examples, conf["components"],
-                                                                conf["iterations"])
+        return DivergenceLeeSeungNonnegativeMatrixFactorization(n_features, n_examples,  k, i)
+    elif t == "sparse":
+        logging.info("Creating nonnegative matrix factorization using Hoyer's sparse loss")
+        s = conf["sparseness"]
+        l = conf["learning rate"],
+        d = conf["learning rate decay"]
+        return SparseHoyerNonnegativeMatrixFactorization(n_features, n_examples,  k, i, s, l, d)
+    elif t == "sparse-l2":
+        logging.info("Creating nonnegative matrix factorization using own sparse + L2 loss")
+        s = conf["sparseness"]
+        l = conf["learning rate"],
+        d = conf["learning rate decay"]
+        l2 = conf["l2"]
+        return SparseL2NonnegativeMatrixFactorization(n_features, n_examples,  k, i, s, l2, l, d)
     else:
         raise ValueError("Invalid NMF type: {0}".format(conf["type"]))
 

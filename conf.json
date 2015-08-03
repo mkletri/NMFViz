@@ -4,8 +4,12 @@
         "number": 100
     },
     "nmf": {
-        "type": "divergence",
+        "type": "sparse-l2",
         "components": 40,
-        "iterations": 100
+        "iterations": 1000,
+        "sparseness": 10,
+        "learning rate": 0.03,
+        "learning rate decay": 1,
+        "l2": 0.01
     }
 }
