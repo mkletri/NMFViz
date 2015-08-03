@@ -53,7 +53,7 @@ The python script viz.py reads its configuration from the conf.json file. Parame
 Careful, this script is written in Python 2. It converts the 'cPickled' batches to '.npy' files that numpy can load.
 It also converts RGB images to grayscale images.
 
-Screenshot
+Screenshots
 ------
 
 Here is a screenshot of the 'divergence' NMF with 40 components and 100 iterations on 100 'Cropped Yale' images.
